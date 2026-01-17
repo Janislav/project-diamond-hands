@@ -1,0 +1,145 @@
+# Project Diamond Hands
+
+A transaction processing engine written in Rust that processes financial transactions from CSV files and generates account summaries.
+
+## Assumptions
+
+The following assumptions are made:
+
+- The input file contains only valid data. Invalid data is not handled gracefully and will result in an error shutdown.
+- Input amounts have the correct level of precision (up to 4 decimal places).
+- Withdrawals are not disputable since the money has already left the system.
+
+## Features
+
+- **Streaming Processing**: Efficiently processes large CSV files without loading everything into memory
+- **Precise Decimal Arithmetic**: Uses `rust_decimal` to avoid floating-point precision issues
+- **4 Decimal Place Precision**: Automatically enforces decimal place precision of the input data
+- **Comprehensive Transaction Support**: Handles deposits, withdrawals, disputes, resolves, and chargebacks
+- **Account State Management**: Tracks available, held, and total balances for each client
+- **Error Handling**: Robust error handling with detailed error messages
+
+## Tradeoffs/Limitations
+
+- For readability and convenience, I used **Decimal** instead of **u128** and integer math. This makes it possible to have negative **Amounts**. To verify this is not the case, I introduced a property test to prove this. It's worth mentioning, though, that a **u128** wouldn't give us real guarantees about correctness. In the worst case, it would silently saturate to zero and mask logical bugs.
+
+- The historical transactions (deposits) are saved in memory instead of being stored in a database. This could grow in memory and ran out of RAM, even though I tried to only save the relevant pieces of data.
+
+- Accounts are also held in memory and could potentially crash the RAM (in theory).
+
+- Streaming is only implemented for reading the input file and processing transactions. The output cannot be streamed because the final state of all accounts is required before generating the CSV output.
+
+## Installation
+
+Clone the repository and build:
+
+```bash
+git clone <repository-url>
+cd project-diamond-hands
+cargo build
+```
+
+## Usage
+
+### Basic Usage
+
+The program reads a CSV file containing transactions and outputs account summaries to stdout.
+
+**Input file format** (`transactions.csv`):
+```csv
+type,client,tx,amount
+deposit,1,1,1.0
+deposit,2,2,2.0
+withdrawal,1,3,0.5
+```
+
+**Output format** (printed to stdout):
+```csv
+client,availabe,held,total,locked
+1,0.5,0,0.5,false
+2,2.0,0,2.0,false
+```
+
+Process transactions from a CSV file:
+
+```bash
+cargo run -- transactions.csv
+```
+
+Redirect output to a file:
+
+```bash
+cargo run -- transactions.csv > accounts.csv
+```
+
+## Transaction Types
+
+### Deposit
+Adds funds to a client's account. Increases both available and total balance.
+
+### Withdrawal
+Removes funds from a client's account. Decreases both available and total balance, but only if sufficient funds are available. Note: Withdrawals cannot be disputed because the money leaves the system and is gone.
+
+### Dispute
+Initiates a dispute on a previous transaction. Moves funds from available to held balance, freezing them until resolved or chargebacked. The total balance remains unchanged.
+
+### Resolve
+Resolves a previously disputed transaction. Moves funds back from held to available balance, releasing the frozen funds. The total balance remains unchanged.
+
+### Chargeback
+Finalizes a dispute by reversing the original transaction. Withdraws funds from both held and total balance, and locks the account. This is the final state of a dispute.
+
+## Transaction Flow
+
+### Basic Transactions
+
+1. **Deposit**: Adds funds to a client's account. Increases both available and total balance.
+2. **Withdrawal**: Removes funds from a client's account. Decreases both available and total balance, but only if sufficient funds are available.
+
+### Dispute Resolution Flows
+
+The system supports two sequential flows for handling disputes:
+
+1. **Dispute → Resolve**: Dispute is resolved, funds are released back to available
+2. **Dispute → Chargeback**: Dispute is finalized, funds are withdrawn and account is locked
+
+Once a dispute is resolved, it cannot be chargebacked (and vice versa).
+
+## Testing
+
+Run the test suite:
+
+```bash
+cargo test
+```
+
+Run tests with output:
+
+```bash
+cargo test -- --nocapture
+```
+
+## Project Structure
+
+```
+project-diamond-hands/
+├── src/
+│   ├── main.rs      # Application entry point
+│   ├── engine.rs    # Transaction processing engine
+│   ├── io.rs        # CSV input/output operations
+│   └── types.rs     # Core data types and structures
+├── Cargo.toml       # Project dependencies
+└── README.md        # This file
+```
+
+## Dependencies
+
+- **serde**: Serialization/deserialization framework
+- **csv**: CSV file reading and writing
+- **anyhow**: Ergonomic error handling
+- **rust_decimal**: Precise decimal arithmetic for financial calculations
+
+### Dev Dependencies
+
+- **rand**: Random number generation for testing
+- **proptest**: Property-based testing framework
