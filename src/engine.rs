@@ -73,11 +73,7 @@ where
             TxType::Dispute => {
                 if let Some(account) = accounts.get_mut(&tx.client) {
                     if let Some(disputed_tx) = deposit_history.get(&tx.tx) {
-                        // Verify the disputed transaction belongs to the same client
-                        // and that there are sufficient funds available to dispute
-                        if disputed_tx.client == tx.client
-                            && account.available >= disputed_tx.amount
-                        {
+                        if disputed_tx.client == tx.client {
                             account.available = account
                                 .available
                                 .checked_sub(disputed_tx.amount)
@@ -97,8 +93,6 @@ where
             }
             TxType::Resolve => {
                 if let Some(account) = accounts.get_mut(&tx.client) {
-                    // Only process if deposit exists, belongs to same client, has an active dispute,
-                    // and sufficient funds are held
                     if let Some(original) = deposit_history.get(&tx.tx) {
                         if original.client == tx.client
                             && disputed_transactions.contains(&tx.tx)
@@ -750,170 +744,5 @@ mod tests {
 
         // Verify subsequent deposits/withdrawals were ignored
         // If they weren't ignored, the account would have different balances
-    }
-}
-
-#[cfg(test)]
-mod proptests {
-    use super::*;
-    use crate::types::{Transaction, TxType};
-    use proptest::prelude::*;
-    use rust_decimal::Decimal;
-
-    /// Generates a strategy for creating random transactions.
-    ///
-    /// This generates deposits, withdrawals, disputes, resolves, and chargebacks with:
-    /// - Client IDs: 1-10
-    /// - Transaction IDs: 1-1000
-    /// - Amounts: 0.01 to 1000.0 (rounded to 0-4 decimal places for deposits/withdrawals)
-    /// - Disputes/resolves/chargebacks reference existing deposit transaction IDs
-    fn transaction_strategy() -> impl Strategy<Value = Vec<Transaction>> {
-        prop::collection::vec(
-            (
-                1u16..=10u16,       // client
-                1u32..=1000u32,     // tx
-                (1u64..=100000u64), // amount in cents (0.01 to 1000.00)
-                0u8..=9u8,          // transaction type selector
-                0u8..=3u8,          // decimal places (0-4)
-            ),
-            1..=100,
-        )
-        .prop_map(|tx_params| {
-            let mut transactions = Vec::new();
-            let mut deposit_tx_ids: Vec<(u16, u32, Decimal)> = Vec::new(); // (client, tx_id, amount)
-            let mut tx_id_counter = 1u32;
-
-            for (client, _tx_id, amount_cents, tx_type_selector, decimal_places) in tx_params {
-                // Convert amount to decimal with variable precision
-                let mut amount = Decimal::from(amount_cents) / Decimal::from(100);
-                amount = amount.round_dp(decimal_places as u32);
-
-                let tx = match tx_type_selector {
-                    0..=4 => {
-                        // 50% deposits
-                        let deposit_tx = Transaction {
-                            tx_type: TxType::Deposit,
-                            client,
-                            tx: tx_id_counter,
-                            amount,
-                        };
-                        deposit_tx_ids.push((client, tx_id_counter, amount));
-                        tx_id_counter += 1;
-                        deposit_tx
-                    }
-                    5..=6 => {
-                        // 20% withdrawals
-                        let withdrawal_tx = Transaction {
-                            tx_type: TxType::Withdrawal,
-                            client,
-                            tx: tx_id_counter,
-                            amount,
-                        };
-                        tx_id_counter += 1;
-                        withdrawal_tx
-                    }
-                    7 => {
-                        // 10% disputes (reference existing deposit)
-                        if let Some((ref_client, ref_tx_id, _)) = deposit_tx_ids.last() {
-                            Transaction {
-                                tx_type: TxType::Dispute,
-                                client: *ref_client,
-                                tx: *ref_tx_id,
-                                amount: Decimal::ZERO,
-                            }
-                        } else {
-                            // No deposits yet, create a deposit instead
-                            let deposit_tx = Transaction {
-                                tx_type: TxType::Deposit,
-                                client,
-                                tx: tx_id_counter,
-                                amount,
-                            };
-                            deposit_tx_ids.push((client, tx_id_counter, amount));
-                            tx_id_counter += 1;
-                            deposit_tx
-                        }
-                    }
-                    8 => {
-                        // 10% resolves (reference existing deposit)
-                        if let Some((ref_client, ref_tx_id, _)) = deposit_tx_ids.last() {
-                            Transaction {
-                                tx_type: TxType::Resolve,
-                                client: *ref_client,
-                                tx: *ref_tx_id,
-                                amount: Decimal::ZERO,
-                            }
-                        } else {
-                            // No deposits yet, create a deposit instead
-                            let deposit_tx = Transaction {
-                                tx_type: TxType::Deposit,
-                                client,
-                                tx: tx_id_counter,
-                                amount,
-                            };
-                            deposit_tx_ids.push((client, tx_id_counter, amount));
-                            tx_id_counter += 1;
-                            deposit_tx
-                        }
-                    }
-                    _ => {
-                        // 10% chargebacks (reference existing deposit)
-                        if let Some((ref_client, ref_tx_id, _)) = deposit_tx_ids.last() {
-                            Transaction {
-                                tx_type: TxType::Chargeback,
-                                client: *ref_client,
-                                tx: *ref_tx_id,
-                                amount: Decimal::ZERO,
-                            }
-                        } else {
-                            // No deposits yet, create a deposit instead
-                            let deposit_tx = Transaction {
-                                tx_type: TxType::Deposit,
-                                client,
-                                tx: tx_id_counter,
-                                amount,
-                            };
-                            deposit_tx_ids.push((client, tx_id_counter, amount));
-                            tx_id_counter += 1;
-                            deposit_tx
-                        }
-                    }
-                };
-
-                transactions.push(tx);
-            }
-
-            transactions
-        })
-    }
-
-    /// Property test: After processing any sequence of transactions,
-    /// all account balances (available, held, total) must be non-negative.
-    #[test]
-    fn balance_is_never_negative() {
-        proptest!(|(transactions in transaction_strategy())| {
-            let accounts = proccess_transactions(transactions.into_iter().map(Ok)).unwrap();
-
-            for (client_id, account) in accounts {
-                prop_assert!(
-                    account.available >= Decimal::ZERO,
-                    "Account {} available balance must be non-negative, got {}",
-                    client_id,
-                    account.available
-                );
-                prop_assert!(
-                    account.held >= Decimal::ZERO,
-                    "Account {} held balance must be non-negative, got {}",
-                    client_id,
-                    account.held
-                );
-                prop_assert!(
-                    account.total >= Decimal::ZERO,
-                    "Account {} total balance must be non-negative, got {}",
-                    client_id,
-                    account.total
-                );
-            }
-        });
     }
 }

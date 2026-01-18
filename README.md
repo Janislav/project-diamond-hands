@@ -22,8 +22,6 @@ The following assumptions are made:
 
 ## Tradeoffs/Limitations
 
-- For readability and convenience, I used **Decimal** instead of **u128** and integer math. This makes it possible to have negative **Amounts**. To verify this is not the case, I introduced a property test to prove this. It's worth mentioning, though, that a **u128** wouldn't give us real guarantees about correctness. In the worst case, it would silently saturate to zero and mask logical bugs in release build or panic in debug build.
-
 - The historical transactions (deposits) are saved in memory instead of being stored in a database. This could grow in memory and ran out of RAM, even though I tried to only save the relevant pieces of data.
 
 - Accounts are also held in memory and could potentially crash the RAM (in theory).
@@ -137,8 +135,3 @@ project-diamond-hands/
 - **csv**: CSV file reading and writing
 - **anyhow**: Ergonomic error handling
 - **rust_decimal**: Precise decimal arithmetic for financial calculations
-
-### Dev Dependencies
-
-- **rand**: Random number generation for testing
-- **proptest**: Property-based testing framework
