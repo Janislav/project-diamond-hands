@@ -35,7 +35,7 @@ where
         let tx = tx_result?;
         if let Some(acc) = accounts.get(&tx.client) {
             if acc.locked {
-                continue; // ignore all further tx for locked accounts
+                continue;
             }
         }
         match tx.tx_type {
@@ -73,6 +73,9 @@ where
             TxType::Dispute => {
                 if let Some(account) = accounts.get_mut(&tx.client) {
                     if let Some(disputed_tx) = deposit_history.get(&tx.tx) {
+                        if disputed_transactions.contains(&tx.tx) {
+                            continue;
+                        }
                         if disputed_tx.client == tx.client {
                             account.available = account
                                 .available
