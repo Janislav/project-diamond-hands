@@ -81,10 +81,10 @@ cargo run -- transactions.csv > accounts.csv
 ## Transaction Types
 
 ### Deposit
-Adds funds to a client's account. Increases both available and total balance.
+Adds funds to a client's account. Increases both available and total balance. If the account doesn't exist, it will be created automatically.
 
 ### Withdrawal
-Removes funds from a client's account. Decreases both available and total balance, but only if sufficient funds are available. Note: Withdrawals cannot be disputed because the money leaves the system and is gone.
+Removes funds from a client's account. Decreases both available and total balance, but only if sufficient funds are available. Withdrawals cannot be disputed because the money leaves the system and is gone.
 
 ### Dispute
 Initiates a dispute on a previous transaction. Moves funds from available to held balance, freezing them until resolved or chargebacked. The total balance remains unchanged.
