@@ -28,6 +28,13 @@ The following assumptions are made:
 
 - Streaming is only implemented for reading the input file and processing transactions. The output cannot be streamed because the final state of all accounts is required before generating the CSV output.
 
+## Testing/Validation
+
+- **Input Validation**: Automatic type checking and CSV serialization/deserialization validation
+- **Unit Testing**: Business logic is implemented as pure functions and thoroughly tested with unit tests
+- **Manual Test Data**: A simple test dataset in **test-data.csv** for manual verification
+- **Large Dataset Testing**: Generated **test-data-big.csv** with ~1000 transactions for testing against larger random datasets
+
 ## Installation
 
 Clone the repository and build:
