@@ -21,7 +21,7 @@ The following assumptions are made:
 
 ## Tradeoffs/Limitations
 
-- For readability and convenience, I used **Decimal** instead of **u128** and integer math. This makes it possible to have negative **Amounts**. To verify this is not the case, I introduced a property test to prove this. It's worth mentioning, though, that a **u128** wouldn't give us real guarantees about correctness. In the worst case, it would silently saturate to zero and mask logical bugs.
+- For readability and convenience, I used **Decimal** instead of **u128** and integer math. This makes it possible to have negative **Amounts**. To verify this is not the case, I introduced a property test to prove this. It's worth mentioning, though, that a **u128** wouldn't give us real guarantees about correctness. In the worst case, it would silently saturate to zero and mask logical bugs in release build or panic in debug build.
 
 - The historical transactions (deposits) are saved in memory instead of being stored in a database. This could grow in memory and ran out of RAM, even though I tried to only save the relevant pieces of data.
 
@@ -102,8 +102,6 @@ The system supports two sequential flows for handling disputes:
 
 1. **Dispute → Resolve**: Dispute is resolved, funds are released back to available
 2. **Dispute → Chargeback**: Dispute is finalized, funds are withdrawn and account is locked
-
-Once a dispute is resolved, it cannot be chargebacked (and vice versa).
 
 ## Testing
 
