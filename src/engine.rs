@@ -33,6 +33,11 @@ where
 
     for tx_result in transactions {
         let tx = tx_result?;
+        if let Some(acc) = accounts.get(&tx.client) {
+            if acc.locked {
+                continue; // ignore all further tx for locked accounts
+            }
+        }
         match tx.tx_type {
             TxType::Deposit => {
                 match accounts.get_mut(&tx.client) {
@@ -686,6 +691,65 @@ mod tests {
             !account.locked,
             "Account should not be locked when chargeback is ignored"
         );
+    }
+
+    #[test]
+    fn locked_account_ignores_further_transactions() {
+        // Test that once an account is locked, all further transactions are ignored
+        let transactions = vec![
+            Transaction {
+                tx_type: TxType::Deposit,
+                client: 1,
+                tx: 1,
+                amount: Decimal::from_str("10.0").unwrap(),
+            },
+            Transaction {
+                tx_type: TxType::Dispute,
+                client: 1,
+                tx: 1,
+                amount: Decimal::ZERO,
+            },
+            Transaction {
+                tx_type: TxType::Chargeback,
+                client: 1,
+                tx: 1, // Locks the account
+                amount: Decimal::ZERO,
+            },
+            // These should all be ignored because account is locked
+            Transaction {
+                tx_type: TxType::Deposit,
+                client: 1,
+                tx: 2,
+                amount: Decimal::from_str("5.0").unwrap(),
+            },
+            Transaction {
+                tx_type: TxType::Withdrawal,
+                client: 1,
+                tx: 3,
+                amount: Decimal::from_str("2.0").unwrap(),
+            },
+            Transaction {
+                tx_type: TxType::Deposit,
+                client: 1,
+                tx: 4,
+                amount: Decimal::from_str("100.0").unwrap(),
+            },
+        ];
+
+        let accounts = proccess_transactions_vec(transactions);
+        let account = accounts.get(&1).expect("Account should exist");
+
+        // Account should be locked
+        assert!(account.locked, "Account should be locked after chargeback");
+
+        // Balances should be as if chargeback was the last processed transaction
+        // (chargeback removed 10.0 from total and held, leaving 0)
+        assert_eq!(account.available, Decimal::from_str("0.0").unwrap());
+        assert_eq!(account.held, Decimal::from_str("0.0").unwrap());
+        assert_eq!(account.total, Decimal::from_str("0.0").unwrap());
+
+        // Verify subsequent deposits/withdrawals were ignored
+        // If they weren't ignored, the account would have different balances
     }
 }
 
