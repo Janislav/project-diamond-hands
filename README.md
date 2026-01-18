@@ -9,6 +9,7 @@ The following assumptions are made:
 - The input file contains only valid data. Invalid data is not handled gracefully and will result in an error shutdown.
 - Input amounts have the correct level of precision (up to 4 decimal places).
 - Withdrawals are not disputable since the money has already left the system.
+- After a chargeback the account is marked as locked (frozen). In this implementation, locked accounts ignore any subsequent transactions to prevent further state changes.
 
 ## Features
 
