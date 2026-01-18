@@ -37,8 +37,8 @@ where
             TxType::Deposit => {
                 match accounts.get_mut(&tx.client) {
                     Some(account) => {
-                        account.availabe =
-                            account.availabe.checked_add(tx.amount).ok_or_else(|| {
+                        account.available =
+                            account.available.checked_add(tx.amount).ok_or_else(|| {
                                 anyhow::anyhow!("Overflow in deposit available balance")
                             })?;
                         account.total = account
@@ -54,12 +54,12 @@ where
             }
             TxType::Withdrawal => {
                 if let Some(account) = accounts.get_mut(&tx.client) {
-                    if tx.amount <= account.availabe {
+                    if tx.amount <= account.available {
                         account.total = account.total.checked_sub(tx.amount).ok_or_else(|| {
                             anyhow::anyhow!("Underflow in withdrawal total balance")
                         })?;
-                        account.availabe =
-                            account.availabe.checked_sub(tx.amount).ok_or_else(|| {
+                        account.available =
+                            account.available.checked_sub(tx.amount).ok_or_else(|| {
                                 anyhow::anyhow!("Underflow in withdrawal available balance")
                             })?;
                     }
@@ -70,14 +70,15 @@ where
                     if let Some(disputed_tx) = deposit_history.get(&tx.tx) {
                         // Verify the disputed transaction belongs to the same client
                         // and that there are sufficient funds available to dispute
-                        if disputed_tx.client == tx.client && account.availabe >= disputed_tx.amount
+                        if disputed_tx.client == tx.client
+                            && account.available >= disputed_tx.amount
                         {
-                            account.availabe = account
-                                .availabe
+                            account.available = account
+                                .available
                                 .checked_sub(disputed_tx.amount)
                                 .ok_or_else(|| {
-                                    anyhow::anyhow!("Underflow in dispute available balance")
-                                })?;
+                                anyhow::anyhow!("Underflow in dispute available balance")
+                            })?;
                             account.held = account
                                 .held
                                 .checked_add(disputed_tx.amount)
@@ -98,12 +99,10 @@ where
                             && disputed_transactions.contains(&tx.tx)
                             && account.held >= original.amount
                         {
-                            account.availabe = account
-                                .availabe
-                                .checked_add(original.amount)
-                                .ok_or_else(|| {
-                                    anyhow::anyhow!("Overflow in resolve available balance")
-                                })?;
+                            account.available =
+                                account.available.checked_add(original.amount).ok_or_else(
+                                    || anyhow::anyhow!("Overflow in resolve available balance"),
+                                )?;
                             account.held =
                                 account.held.checked_sub(original.amount).ok_or_else(|| {
                                     anyhow::anyhow!("Underflow in resolve held balance")
@@ -177,7 +176,7 @@ mod tests {
         let account = accounts.get(&1).expect("Account should exist");
 
         // Verify the withdrawal succeeded - balance should be 5.0 (10.0 - 5.0)
-        assert_eq!(account.availabe, Decimal::from_str("5.0").unwrap());
+        assert_eq!(account.available, Decimal::from_str("5.0").unwrap());
         assert_eq!(account.total, Decimal::from_str("5.0").unwrap());
     }
 
@@ -204,7 +203,7 @@ mod tests {
         let account = accounts.get(&1).expect("Account should exist");
 
         // Verify the withdrawal failed - balance should still be 10.0
-        assert_eq!(account.availabe, Decimal::from_str("10.0").unwrap());
+        assert_eq!(account.available, Decimal::from_str("10.0").unwrap());
         assert_eq!(account.total, Decimal::from_str("10.0").unwrap());
     }
 
@@ -230,7 +229,7 @@ mod tests {
         let account = accounts.get(&1).expect("Account should exist");
 
         // Available should decrease by disputed amount (10.0)
-        assert_eq!(account.availabe, Decimal::from_str("0.0").unwrap());
+        assert_eq!(account.available, Decimal::from_str("0.0").unwrap());
         // Held should increase by disputed amount (10.0)
         assert_eq!(account.held, Decimal::from_str("10.0").unwrap());
         // Total should remain unchanged
@@ -259,7 +258,7 @@ mod tests {
         let account = accounts.get(&1).expect("Account should exist");
 
         // Account should be unchanged since dispute was ignored
-        assert_eq!(account.availabe, Decimal::from_str("10.0").unwrap());
+        assert_eq!(account.available, Decimal::from_str("10.0").unwrap());
         assert_eq!(account.held, Decimal::from_str("0.0").unwrap());
         assert_eq!(account.total, Decimal::from_str("10.0").unwrap());
     }
@@ -292,7 +291,7 @@ mod tests {
         let account = accounts.get(&1).expect("Account should exist");
 
         // Available should be 5.0 (only second deposit remains available)
-        assert_eq!(account.availabe, Decimal::from_str("5.0").unwrap());
+        assert_eq!(account.available, Decimal::from_str("5.0").unwrap());
         // Held should be 10.0 (first deposit is held)
         assert_eq!(account.held, Decimal::from_str("10.0").unwrap());
         // Total should be 15.0 (sum of both deposits)
@@ -327,7 +326,7 @@ mod tests {
         let account = accounts.get(&1).expect("Account should exist");
 
         // After resolve, funds should be back in available
-        assert_eq!(account.availabe, Decimal::from_str("10.0").unwrap());
+        assert_eq!(account.available, Decimal::from_str("10.0").unwrap());
         // Held should be back to zero
         assert_eq!(account.held, Decimal::from_str("0.0").unwrap());
         // Total should remain unchanged
@@ -362,7 +361,7 @@ mod tests {
         let account = accounts.get(&1).expect("Account should exist");
 
         // Account should still have funds in held (resolve was ignored)
-        assert_eq!(account.availabe, Decimal::from_str("0.0").unwrap());
+        assert_eq!(account.available, Decimal::from_str("0.0").unwrap());
         assert_eq!(account.held, Decimal::from_str("10.0").unwrap());
         assert_eq!(account.total, Decimal::from_str("10.0").unwrap());
     }
@@ -390,7 +389,7 @@ mod tests {
         let account = accounts.get(&1).expect("Account should exist");
 
         // Account should be unchanged (resolve was ignored)
-        assert_eq!(account.availabe, Decimal::from_str("10.0").unwrap());
+        assert_eq!(account.available, Decimal::from_str("10.0").unwrap());
         assert_eq!(account.held, Decimal::from_str("0.0").unwrap());
         assert_eq!(account.total, Decimal::from_str("10.0").unwrap());
     }
@@ -430,7 +429,7 @@ mod tests {
         let account = accounts.get(&1).expect("Account should exist");
 
         // Account should be as if resolve never happened (funds withdrawn, account locked)
-        assert_eq!(account.availabe, Decimal::from_str("0.0").unwrap());
+        assert_eq!(account.available, Decimal::from_str("0.0").unwrap());
         assert_eq!(account.held, Decimal::from_str("0.0").unwrap());
         assert_eq!(account.total, Decimal::from_str("0.0").unwrap());
         // Account should still be locked (chargeback happened, resolve was ignored)
@@ -480,7 +479,7 @@ mod tests {
         let account = accounts.get(&1).expect("Account should exist");
 
         // Available should be 10.0 (first deposit resolved)
-        assert_eq!(account.availabe, Decimal::from_str("10.0").unwrap());
+        assert_eq!(account.available, Decimal::from_str("10.0").unwrap());
         // Held should be 5.0 (second deposit still disputed)
         assert_eq!(account.held, Decimal::from_str("5.0").unwrap());
         // Total should be 15.0 (sum of both deposits)
@@ -515,7 +514,7 @@ mod tests {
         let account = accounts.get(&1).expect("Account should exist");
 
         // Available should remain 0 (was moved to held, then withdrawn)
-        assert_eq!(account.availabe, Decimal::from_str("0.0").unwrap());
+        assert_eq!(account.available, Decimal::from_str("0.0").unwrap());
         // Held should be 0 (withdrawn)
         assert_eq!(account.held, Decimal::from_str("0.0").unwrap());
         // Total should decrease by disputed amount (10.0 - 10.0 = 0.0)
@@ -552,7 +551,7 @@ mod tests {
         let account = accounts.get(&1).expect("Account should exist");
 
         // Account should still have funds in held (chargeback was ignored)
-        assert_eq!(account.availabe, Decimal::from_str("0.0").unwrap());
+        assert_eq!(account.available, Decimal::from_str("0.0").unwrap());
         assert_eq!(account.held, Decimal::from_str("10.0").unwrap());
         assert_eq!(account.total, Decimal::from_str("10.0").unwrap());
         // Account should not be locked
@@ -585,7 +584,7 @@ mod tests {
         let account = accounts.get(&1).expect("Account should exist");
 
         // Account should be unchanged (chargeback was ignored)
-        assert_eq!(account.availabe, Decimal::from_str("10.0").unwrap());
+        assert_eq!(account.available, Decimal::from_str("10.0").unwrap());
         assert_eq!(account.held, Decimal::from_str("0.0").unwrap());
         assert_eq!(account.total, Decimal::from_str("10.0").unwrap());
         // Account should not be locked
@@ -635,7 +634,7 @@ mod tests {
         let account = accounts.get(&1).expect("Account should exist");
 
         // Available should be 0 (first deposit was disputed, then chargebacked)
-        assert_eq!(account.availabe, Decimal::from_str("0.0").unwrap());
+        assert_eq!(account.available, Decimal::from_str("0.0").unwrap());
         // Held should be 5.0 (second deposit still disputed)
         assert_eq!(account.held, Decimal::from_str("5.0").unwrap());
         // Total should be 5.0 (first deposit withdrawn: 15.0 - 10.0 = 5.0)
@@ -679,7 +678,7 @@ mod tests {
         let account = accounts.get(&1).expect("Account should exist");
 
         // Account should be as if chargeback never happened (funds back in available)
-        assert_eq!(account.availabe, Decimal::from_str("10.0").unwrap());
+        assert_eq!(account.available, Decimal::from_str("10.0").unwrap());
         assert_eq!(account.held, Decimal::from_str("0.0").unwrap());
         assert_eq!(account.total, Decimal::from_str("10.0").unwrap());
         // Account should not be locked (chargeback was ignored)
@@ -833,10 +832,10 @@ mod proptests {
 
             for (client_id, account) in accounts {
                 prop_assert!(
-                    account.availabe >= Decimal::ZERO,
+                    account.available >= Decimal::ZERO,
                     "Account {} available balance must be non-negative, got {}",
                     client_id,
-                    account.availabe
+                    account.available
                 );
                 prop_assert!(
                     account.held >= Decimal::ZERO,

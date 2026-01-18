@@ -227,7 +227,7 @@ impl<'de> Deserialize<'de> for Transaction {
 #[derive(Debug, Deserialize, Serialize, Default)]
 pub struct AccountDetails {
     pub client: ClientId,
-    pub availabe: Amount,
+    pub available: Amount,
     pub held: Amount,
     pub total: Amount,
     pub locked: bool,
@@ -236,7 +236,7 @@ pub struct AccountDetails {
 impl AccountDetails {
     pub fn new_with_balance(balance: Amount) -> Self {
         let mut new_account = AccountDetails::default();
-        new_account.availabe = balance;
+        new_account.available = balance;
         new_account.total = balance;
         new_account
     }
