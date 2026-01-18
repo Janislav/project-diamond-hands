@@ -15,7 +15,7 @@ The following assumptions are made:
 
 - **Streaming Processing**: Efficiently processes large CSV files without loading everything into memory
 - **Precise Decimal Arithmetic**: Uses `rust_decimal` to avoid floating-point precision issues
-- **4 Decimal Place Precision**: Automatically enforces decimal place precision of the input data
+- **4 Decimal Place Precision**: Automatically supports whatever percision is used in the input data
 - **Comprehensive Transaction Support**: Handles deposits, withdrawals, disputes, resolves, and chargebacks
 - **Account State Management**: Tracks available, held, and total balances for each client
 - **Error Handling**: Robust error handling with detailed error messages
